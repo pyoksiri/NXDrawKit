@@ -12,6 +12,9 @@ import UIKit
 @objc public protocol CanvasDelegate {
     @objc optional func canvas(_ canvas: Canvas, didUpdateDrawing drawing: Drawing, mergedImage image: UIImage?)
     @objc optional func canvas(_ canvas: Canvas, didSaveDrawing drawing: Drawing, mergedImage image: UIImage?)
+    @objc optional func canvas(_ canvas: Canvas, touchesBegan location: CGPoint)
+    @objc optional func canvas(_ canvas: Canvas, touchesMoved location: CGPoint)
+    @objc optional func canvas(_ canvas: Canvas, touchesEnded location: CGPoint)
     
     func brush() -> Brush?
 }
@@ -82,7 +85,9 @@ open class Canvas: UIView, UITableViewDelegate {
         self.brush = self.delegate?.brush() ?? defaultBrush()
         
         let touch = touches.first
-        self.points[0] = touch?.location(in: self) ?? CGPoint.zero
+        let location = touch?.location(in: self) ?? CGPoint.zero
+        self.points[0] = location
+        delegate?.canvas?(self, touchesBegan: location)
     }
     
     open override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -97,6 +102,7 @@ open class Canvas: UIView, UITableViewDelegate {
         self.pointMoved = true
         self.pointIndex += 1
         self.points[self.pointIndex] = currentPoint ?? CGPoint.zero
+        delegate?.canvas?(self, touchesMoved: currentPoint ?? CGPoint.zero)
         
         if self.pointIndex == 4 {
             // move the endpoint to the middle of the line joining the second control point of the first Bezier segment
@@ -132,6 +138,10 @@ open class Canvas: UIView, UITableViewDelegate {
         
         self.path.removeAllPoints()
         self.pointIndex = 0
+        
+        let touch = touches.first
+        let currentPoint = touch?.location(in: self)
+        delegate?.canvas?(self, touchesEnded: currentPoint ?? .zero)
     }
     
     
@@ -160,7 +170,12 @@ open class Canvas: UIView, UITableViewDelegate {
     private func updateByLastSession() {
         let lastSession = self.session.lastSession()
         self.mainImageView.image = lastSession?.stroke
+        self.mainImageView.setImageColor(color: brush.color)
         self.backgroundImageView.image = lastSession?.background
+    }
+    
+    open func forceColor(_ color: UIColor) {
+        self.mainImageView.setImageColor(color: color)
     }
     
     private func didUpdateCanvas() {
@@ -313,4 +328,14 @@ open class Canvas: UIView, UITableViewDelegate {
     @objc open func canSave() -> Bool {
         return !(self.isStrokeEqual() && self.isBackgroundEqual())
     }
+}
+
+extension UIImageView {
+  func setImageColor(color: UIColor) {
+      if #available(iOS 13.0, *) {
+          self.image = self.image?.withTintColor(color)
+      } else {
+          // Fallback on earlier versions
+      }
+  }
 }
